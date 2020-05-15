@@ -1,1 +1,3 @@
 GoParrotEnv/
+.vscode/
+__pycache__/
