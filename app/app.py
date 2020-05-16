@@ -12,6 +12,7 @@ import query
 import config
 from sqlalchemy import create_engine
 from argparse import ArgumentParser
+import sys
 
 import datetime
 
@@ -19,8 +20,8 @@ app = Flask(__name__)
 scheduler = APScheduler()
 
 def make_parser():
-    parser = ArgumentParser(description="Train Single Shot MultiBox Detector"
-                                        " on COCO")
+    parser = ArgumentParser(description="MongoDB to PostgreSQL migrator")
+    
     parser.add_argument('--postgres-user', '-pguser', type=str, default=config.POSTGRES_USER, required=False,
                         help='specify postgres user')
     parser.add_argument('--postgres-password', '-pgpass', type=str, default=config.POSTGRES_PASSWORD, required=False,
@@ -51,9 +52,10 @@ def index():
 
 
 class Runner():
-    def __init__(self, date, table_names):
+    def __init__(self, date, table_names, main_table):
         self.current_time = date
         self.table_names = table_names
+        self.main_table = main_table
         self.last_update_time = None
         self.postgre_connection = None
         self.postgre_engine = None
@@ -64,18 +66,11 @@ class Runner():
         self.tables['users'] = {'create_query' : query.users_create, 'upsert_query' : query.users_upsert, 'template': '(%s,%s,%s,%s,%s,%s,%s)'}
 
     def connectDBs(self):
-        try:
-            mongo_connect = "mongodb://" + mongo_user + ":" + mongo_pass + "@" + mongo_host + ":" + str(mongo_port) + "/" + mongo_db
-            logging.info("Connecting to mongo database: %s", mongo_connect)
-            client = pymongo.MongoClient(mongo_connect)
-
-            logging.debug("Init collections...")
-            self.mongo_connection  = client[mongo_db]
-
-            logging.debug("Connected OK to mongo database: %s", mongo_connect)
-        except (Exception) as error:
-            logging.debug("Failed to connect to mongo database: %s", mongo_connect)
-
+        self.connectMongoDB()
+        self.connectPostgreDB()
+        self.createPostgreEngine()
+    
+    def connectPostgreDB(self):
         try:
             postgres_connect = "postgresql://" + postgres_user + ":" + postgres_pass + "@" + postgres_host + ":" + str(postgres_port) + "/" + postgres_db
             logging.info("Connecting to postgre database: %s", postgres_connect)
@@ -87,8 +82,24 @@ class Runner():
 
             logging.debug("Connected OK to postgre database: %s", postgres_connect)
         except (Exception) as error:
-            logging.debug("Failed to connect to postgre database: %s", postgres_connect)
+            logging.error("Failed to connect to postgre database: %s, error %s", postgres_connect, error)
+            sys.exit()
 
+    def connectMongoDB(self):
+        try:
+            mongo_connect = "mongodb://" + mongo_user + ":" + mongo_pass + "@" + mongo_host + ":" + str(mongo_port) + "/" + mongo_db
+            logging.info("Connecting to mongo database: %s", mongo_connect)
+            client = pymongo.MongoClient(mongo_connect)
+
+            logging.debug("Init collections...")
+            self.mongo_connection  = client[mongo_db]
+
+            logging.debug("Connected OK to mongo database: %s", mongo_connect)
+        except (Exception) as error:
+            logging.error("Failed to connect to mongo database: %s, error %s", mongo_connect, error)
+            sys.exit()
+
+    def createPostgreEngine(self):
         try:
             postgres_connect_engine = "postgresql+psycopg2://" + postgres_user + ":" + postgres_pass + "@" + postgres_host + ":" + str(postgres_port) + "/" + postgres_db
             logging.info("Creating postgre engine: %s", postgres_connect_engine)
@@ -97,20 +108,38 @@ class Runner():
 
             logging.info("Created OK postgre engine: %s", postgres_connect_engine)
         except (Exception) as error:
-            logging.debug("Failed to create postgre engine: %s", postgres_connect_engine)
+            logging.error("Failed to create postgre engine: %s, error %s", postgres_connect_engine, error)
+            sys.exit()
+
+    def createTable(self, table_name):
+        try:
+            with self.postgre_connection.cursor() as cursor:
+                        cursor.execute("select exists(select * from information_schema.tables where table_name=%s)", (table_name,))
+                        if not cursor.fetchone()[0]:
+                            logging.warning("Table %s does not exist, create it", table_name)
+                            create_query = self.tables[table_name]['create_query']
+                            cursor.execute(create_query)
+                            self.postgre_connection.commit()
+        except (Exception) as error:
+            logging.error("Failed to create table %s, error %s", error)
+            sys.exit()
 
     def populateDB(self):
         logging.debug("Populating database")
         self.connectDBs()
+        [self.createTable(table_name) for table_name in self.table_names]
         [self.populateTable(table_name) for table_name in self.table_names]
-
+        self.last_update_time = self.current_time
+        self.createMainTable()
+    
     def populateTable(self, table_name):
         logging.info("Populating table %s", table_name)
         try:
-            mongoDBData = self.mongo_connection[table_name].find({"created_at": {"$lt": self.current_time }})
+            mongoDBData = self.mongo_connection[table_name].find({"$or" : [{"created_at": {"$lt": self.current_time }},
+                                                                           {"updated_at": {"$lt": self.current_time}} ]})
         except (Exception) as error:
             logging.error("Could not get data from mongoDB for table %s", table_name)
-            return
+            sys.exit()
 
         if mongoDBData.count() == 0:
             # The table will be created during the next update
@@ -119,10 +148,13 @@ class Runner():
         columns = list(mongoDBData[0].keys())
 
         df = pd.DataFrame(mongoDBData, columns=columns[1:])
+        if table_name == "users":
+            df.rename(columns={'updated_at' : 'updated_at_user', 'created_at' : 'created_at_user'}, inplace=True)
         try:
             df.head(0).to_sql(table_name, self.postgre_engine, if_exists='replace', index=False) #truncates the table
         except (Exception) as error:
-            logging.error("Could not add header to the table %s", table_name)
+            logging.error("Could not add header to the table %s, error %s", table_name, error)
+            sys.exit()
 
         try:
             with self.postgre_connection.cursor() as cursor:
@@ -134,21 +166,45 @@ class Runner():
                 cursor.execute(sql_query)
                 self.postgre_connection.commit()
         except (Exception) as error:
-            logging.error("Could not populate table %s due to connection issues", table_name)
-        self.last_update_time = self.current_time
+            logging.error("Could not populate table %s, error %s", table_name, error)
+            sys.exit()
+
+    def createMainTable(self):
+        with self.postgre_connection.cursor() as cursor:
+            try:
+                query = """DROP TABLE IF EXISTS """ + self.main_table
+                cursor.execute(query)
+                query = """CREATE TABLE """ + self.main_table + """ AS (SELECT id, created_at, date_tz, item_count, order_id, receive_method,
+                    status, store_id, subtotal, tax_percentage, total, total_discount, total_gratuity, total_tax, updated_at, user_id,
+                    fulfillment_date_tz, first_name, last_name, merchant_id, phone_number, created_at_user, updated_at_user
+                    FROM """ + self.table_names[0] + """ LEFT OUTER JOIN """ + self.table_names[1] + """ USING (user_id))"""
+                cursor.execute(query)
+                query = """ALTER TABLE """ + self.main_table + """ ADD PRIMARY KEY (id)""" # id
+                cursor.execute(query)
+                self.postgre_connection.commit()
+            except (Exception) as error:
+                logging.error("Failed to create table, error %s", error)
+                sys.exit()
+            
+            logging.info("Created %s", self.main_table)
 
     def updateDB(self):
+        start = time.time()
         logging.info("Updating database, current time: %s, last update time: %s", self.current_time, self.last_update_time)
         [self.updateTable(table_name) for table_name in self.table_names]
+        self.last_update_time = self.current_time
+        self.createMainTable()
+        end = time.time()
+        logging.error("Overall update time %s", str(end-start))
 
     def updateTable(self, table_name):
         logging.info("Updating table %s", table_name)
         try:
             mongoDBData = self.mongo_connection[table_name].find({"$or" : [{"created_at": {"$gte": self.last_update_time,"$lt": self.current_time}},
-                                                                       {"updated_at": {"$gte": self.last_update_time,"$lt": self.current_time}}]})
+                                                                    {"updated_at": {"$gte": self.last_update_time,"$lt": self.current_time}}]})
         except (Exception) as error:
-            logging.error("Could not get data from mongoDB for table %s", table_name)
-            return
+            logging.error("Could not get data from mongoDB for table %s, error %s", table_name, error)
+            sys.exit()
 
         values = []
         for o in mongoDBData:
@@ -166,13 +222,6 @@ class Runner():
         if values != []:  
             try:
                 with self.postgre_connection.cursor() as cursor:
-                    cursor.execute("select exists(select * from information_schema.tables where table_name=%s)", (table_name,))
-                    if not cursor.fetchone()[0]:
-                        logging.warning("Table %s does not exist, create it", table_name)
-                        create_query = self.tables[table_name]['create_query']
-                        cursor.execute(create_query)
-                        self.postgre_connection.commit()
-
                     upsert_query = self.tables[table_name]['upsert_query']
 
                     logging.debug("Upsert values in table %s", table_name)
@@ -182,14 +231,13 @@ class Runner():
                     )
                     self.postgre_connection.commit()
                     rowcount = cursor.rowcount
-                    logging.debug("%s rows has been updated", str(rowcount), )
             except (Exception) as error:
-                logging.error("Could not update table %s due to connection issues", table_name)
+                logging.error("Could not update table %s error %s", table_name, error)
+                sys.exit()
 
     def scheduledTask(self):
         logging.debug("Scheduled task runned")
-        self.last_update_time = self.current_time
-        self.current_time += datetime.timedelta(hours=24)
+        self.current_time += datetime.timedelta(minutes=5)
         self.updateDB()
 
 if __name__ == '__main__':
@@ -211,11 +259,12 @@ if __name__ == '__main__':
 
     logging.basicConfig(level = logging.DEBUG)
 
-    start_date = datetime.datetime(2019, 6, 24)
+    start_date = datetime.datetime(2020, 1, 1)
     tables = ['orders', 'users']
+    main_table = 'data'
 
-    runner = Runner(start_date, tables)
+    runner = Runner(start_date, tables, main_table)
     runner.populateDB()
-    scheduler.add_job(id = "Scheduled task", func = runner.scheduledTask, trigger = 'interval', seconds = 5)
+    scheduler.add_job(id = "Scheduled task", func = runner.scheduledTask, trigger = 'interval', minutes = 5)
     scheduler.start()
     app.run(debug = False, host = config.HOST, port = 8080)

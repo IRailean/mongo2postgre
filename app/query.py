@@ -1,4 +1,4 @@
-orders_create = """CREATE TABLE orders 
+orders_create = """CREATE TABLE IF NOT EXISTS orders 
                     (id                 BIGINT PRIMARY KEY, 
                     created_at          TIMESTAMP, 
                     date_tz             TIMESTAMP, 
@@ -36,22 +36,22 @@ orders_upsert = """
                     user_id             = EXCLUDED.user_id,
                     fulfillment_date_tz = EXCLUDED.fulfillment_date_tz
                     """
-users_create =  """CREATE TABLE users 
+users_create =  """CREATE TABLE IF NOT EXISTS users 
                     (user_id     BIGINT PRIMARY KEY, 
                     first_name   TEXT, 
                     last_name    TEXT, 
                     merchant_id  TEXT, 
                     phone_number BIGINT, 
-                    created_at   TIMESTAMP,
-                    updated_at   TIMESTAMP);"""
+                    created_at_user   TIMESTAMP,
+                    updated_at_user   TIMESTAMP);"""
 
 users_upsert = """
-                INSERT INTO users (user_id, first_name, last_name, merchant_id, phone_number, created_at, updated_at) 
+                INSERT INTO users (user_id, first_name, last_name, merchant_id, phone_number, created_at_user, updated_at_user) 
                 VALUES %s 
                 ON CONFLICT (user_id) DO UPDATE 
                 SET phone_number = EXCLUDED.phone_number,
                     merchant_id  = EXCLUDED.merchant_id,
-                    updated_at   = EXCLUDED.updated_at,
+                    updated_at_user   = EXCLUDED.updated_at_user,
                     first_name   = EXCLUDED.first_name,
                     last_name    = EXCLUDED.last_name
                     """
