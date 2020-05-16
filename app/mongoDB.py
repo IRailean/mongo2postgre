@@ -3,7 +3,23 @@ import pandas as pd
 import logging
 import datetime
 import numpy as np
+from argparse import ArgumentParser
 import config
+
+def make_parser():
+    parser = ArgumentParser(description="MongoDB to PostgreSQL migrator")
+
+    parser.add_argument('--mongo-user', '-muser', type=str, default=config.MONGO_USER, required=False,
+                        help='specify mongo user')
+    parser.add_argument('--mongo-password', '-mpass', type=str, default=config.MONGO_PASSWORD, required=False,
+                        help='specify mongo password')
+    parser.add_argument('--mongo-host', '-mhost', type=str, default=config.MONGO_HOST, required=False,
+                        help='specify mongo host')
+    parser.add_argument('--mongo-port', '-mport', type=str, default=config.MONGO_PORT, required=False,
+                        help='specify mongo port')
+    parser.add_argument('--mongo-database', '-mdb', type=str, default=config.MONGO_DB, required=False,
+                        help='specify mongo database')
+    return parser
 
 def populateDB():
     logging.debug("Connecting to the database...")
@@ -45,9 +61,13 @@ def populateDB():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    mongo_user = config.MONGO_USER
-    mongo_pass = config.MONGO_PASSWORD
-    mongo_host = config.MONGO_HOST
-    mongo_port = config.MONGO_PORT
-    mongo_db = config.MONGO_DB
+
+    parser = make_parser()
+    args = parser.parse_args()
+
+    mongo_user = args.mongo_user
+    mongo_pass = args.mongo_password
+    mongo_host = args.mongo_host
+    mongo_port = args.mongo_port
+    mongo_db   = args.mongo_database
     populateDB()
