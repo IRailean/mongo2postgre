@@ -1,6 +1,6 @@
 # GoParrot_Test_Task
 
-Migrate collections orders and users (with structure presented in data/orders.csv and data/users.csv files) from MongoDB to one PostgreSQL table.
+Migrate collections named "orders" and "users" (with structure presented in data/orders.csv and data/users.csv files) from MongoDB to one PostgreSQL table.
 
 ## Installation
 
