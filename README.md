@@ -1,4 +1,4 @@
-# GoParrot_Test_Task
+# mongo2postgre
 
 Migrate collections named "orders" and "users" (with structure presented in data/orders.csv and data/users.csv files) from MongoDB to one PostgreSQL table.
 
