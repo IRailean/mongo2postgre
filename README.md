@@ -8,13 +8,17 @@ Clone git repository
 ```
 git clone https://github.com/IRailean/GoParrot_Test_Task.git
 ```
-go to project folder and run
+go to project directory and run
 ```
 pip install -e .
 ```
 
 ## Usage
 ### Populate MongoDB with the data located in data folder:
+Run
+```
+app/mongoDB.py
+```
 Parameters:
 ```
 MongoDB connection
@@ -27,6 +31,10 @@ MongoDB connection
 defaults can be found in app/config.py
 
 ### Migrate MongoDB to PostgreSQL
+Run
+```
+app/app.py
+```
 Starting with 01-01-2020 every 5 minutes MongoDB data will be updated and inserted into "data" table in PostgreSQL.
 Parameters:
 ```
