@@ -6,7 +6,7 @@ Migrate collections named "orders" and "users" (with structure presented in data
 
 Clone git repository
 ```
-git clone https://github.com/IRailean/GoParrot_Test_Task.git
+git clone https://github.com/IRailean/mongo2postgre.git
 ```
 go to project directory and run
 ```
