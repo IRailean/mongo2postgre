@@ -90,8 +90,7 @@ class Runner():
             mongo_connect = "mongodb://" + mongo_user + ":" + mongo_pass + "@" + mongo_host + ":" + str(mongo_port) + "/" + mongo_db
             logging.info("Connecting to mongo database: %s", mongo_connect)
             client = pymongo.MongoClient(mongo_connect)
-
-            logging.debug("Init collections...")
+            
             self.mongo_connection  = client[mongo_db]
 
             logging.debug("Connected OK to mongo database: %s", mongo_connect)

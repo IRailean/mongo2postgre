@@ -5,10 +5,12 @@ setup(
     version='0.1.0',
     packages=find_packages(include=['app', 'app.*']),
     install_requires=[
-        'PyYAML',
-        'pandas==0.23.3',
-        'numpy>=1.14.5',
-        'matplotlib>=2.2.0',
-        'jupyter'
+        'APScheduler>=3.6.3',
+        'Flask>=1.1.2',
+        'Flask-APScheduler>=1.11.0',
+        'pandas>=1.0.3',
+        'psycopg2>=2.8.5',
+        'pymongo>=3.10.1',
+        'SQLAlchemy>=1.3.17'
     ]
 )

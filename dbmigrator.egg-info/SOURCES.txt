@@ -1,0 +1,12 @@
+README.md
+setup.py
+app/__init__.py
+app/app.py
+app/config.py
+app/mongoDB.py
+app/query.py
+dbmigrator.egg-info/PKG-INFO
+dbmigrator.egg-info/SOURCES.txt
+dbmigrator.egg-info/dependency_links.txt
+dbmigrator.egg-info/requires.txt
+dbmigrator.egg-info/top_level.txt
