@@ -17,7 +17,7 @@ pip install -e .
 ### Populate MongoDB with the data located in data folder:
 Run
 ```
-app/mongoDB.py
+python app/mongoDB.py
 ```
 Parameters:
 ```
@@ -33,7 +33,7 @@ defaults can be found in app/config.py
 ### Migrate MongoDB to PostgreSQL
 Run
 ```
-app/app.py
+python app/app.py
 ```
 Starting with 01-01-2020 every 5 minutes MongoDB data will be updated and inserted into "data" table in PostgreSQL.
 Parameters:
